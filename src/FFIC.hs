@@ -5,49 +5,55 @@ module FFIC where
 import Control.Applicative 
 import Control.Monad.State
 
-data NonComposite = CPTChar | CPTInt | CPTLong | CPTUChar | CPTULong | CPTLongLong | CPTULongLong 
-                  | CPTDouble | CPTLongDouble 
-                  | CPTBool | CPTVoid 
-                    deriving Show 
+data Primitive = PrimChar 
+               | PrimInt 
+               | PrimLong 
+               | PrimUChar 
+               | PrimULong 
+               | PrimLongLong 
+               | PrimULongLong 
+               | PrimDouble 
+               | PrimLongDouble 
+               | PrimBool 
+               | PrimVoid 
+                deriving Show 
 
-data CPPType c = Ptr (CPPType c) 
-               | Ref (CPPType c) 
-               | PrimType (PrimitiveTypes c) 
+data Simple c = SPrim Primitive
+              | SOpaq c 
 
-deriving instance (Show c) => Show (CPPType c)
+deriving instance (Show c) => Show (Simple c)
 
+data Composite c = CPtr (Composite c) 
+                 | CRef (Composite c) 
+                 | CSimple (Simple c) 
 
-data PrimitiveTypes c = CPTNonComposite NonComposite
-                      | CPTComposite c 
+deriving instance (Show c) => Show (Composite c)
 
-deriving instance (Show c) => Show (PrimitiveTypes c)
+data Projected c = PPtr (Projected c) 
+                 | PSimple (Simple c)
 
-
-data CType c = Ptr_C (CType c) 
-             | Prim_C (PrimCTypes c)
-
-deriving instance (Show c) => Show (CType c)
+deriving instance (Show c) => Show (Projected c)
 
 
-data PrimCTypes c = CTypNonComposite NonComposite 
-                  | CTypOpaque c  
-
-deriving instance (Show c) => Show (PrimCTypes c) 
-
-data ConversionPrim = Id | Opaqueify | AddPtr | ElimPtr | ChangeRefToPtr deriving Show 
+data ConvPrim c = GetPrim Primitive 
+                | Opaqueify c
+                | AddPtr 
+                | ElimPtr   
+                | ChangeRefToPtr deriving Show 
 
 -- deriving instance (Show c) => Show (ConversionPrim c)
 
-type Conversion = [ConversionPrim] -> [ConversionPrim]  
+type Conversion c = [ConvPrim c] -> [ConvPrim c]  
 
-makeCTypeFromCPPType :: (Functor m, Monad m) => CPPType c -> StateT Conversion m (CType c) 
-makeCTypeFromCPPType (Ptr (PrimType (CPTComposite x))) = modify ( . (Opaqueify :)) 
-                                                         *> pure (Prim_C (CTypOpaque x))
-makeCTypeFromCPPType (Ptr x) = modify ( . (AddPtr :)) >> Ptr_C <$> makeCTypeFromCPPType x
-makeCTypeFromCPPType (Ref x) = modify ( . (ChangeRefToPtr :)) *>makeCTypeFromCPPType (Ptr x) 
-makeCTypeFromCPPType (PrimType (CPTComposite x)) = modify ( . (Opaqueify :)) 
-                                                   *> pure (Prim_C (CTypOpaque x))
-makeCTypeFromCPPType (PrimType (CPTNonComposite x)) = return (Prim_C (CTypNonComposite x))
+makeCTypeFromCPPType :: (Functor m, Monad m) => Composite c -> StateT (Conversion c) m (Projected c) 
+makeCTypeFromCPPType (CPtr (CSimple (SOpaq x))) = modify ( . (Opaqueify x :)) 
+                                                         *> pure (PSimple (SOpaq x))
+makeCTypeFromCPPType (CPtr x) = modify ( . (AddPtr :)) >> PPtr <$> makeCTypeFromCPPType x
+makeCTypeFromCPPType (CRef x) = modify ( . (ChangeRefToPtr :)) *>makeCTypeFromCPPType (CPtr x) 
+makeCTypeFromCPPType (CSimple (SOpaq x)) = modify ( . (Opaqueify x :)) 
+                                                   *> pure (PSimple (SOpaq x))
+makeCTypeFromCPPType (CSimple (SPrim x)) = modify ( . (GetPrim x :)) 
+                                                      *> pure (PSimple (SPrim x))
 
 
 
