@@ -1,5 +1,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module FFIC where 
 
@@ -9,9 +10,18 @@ import Control.Monad.State hiding (mapM_)
 import Data.Foldable (mapM_)
 import Data.List (intercalate)
 import Data.Sequence (Seq(..),(<|),(|>),empty,singleton)
-import qualified Data.Sequence as S (reverse)
+import qualified Data.Sequence as S (reverse,null)
 -- 
 import Prelude hiding (mapM_)
+
+
+-------------------------
+-- some utilities here -- 
+-------------------------
+
+indent :: Int -> String -> String 
+indent n =  unlines . map (replicate n ' ' ++ ) . lines  
+
 
 
 data Primitive = PrimChar 
@@ -51,6 +61,7 @@ data Function t = Function { funcName :: String
                              , funcRet  :: t }
   
 
+deriving instance Functor Function 
 
 data ConversionPrimitive c = ReinterpretCast c
                            | ApplyStar
@@ -124,6 +135,8 @@ mkCTypeFromProjected (PPtr x) = "(" ++  mkCTypeFromProjected x ++ "*)"
 
 -- | 
 data Var t = Var { varType :: t, varName :: String }
+
+deriving instance Functor Var 
 
 -- | 
 class Nameable a where 
@@ -202,8 +215,27 @@ mkFuncDecl f = let retstr = (mkCType . funcRet) f
 -- | 
 mkFuncCallStr :: Function (CompProjPair String) -> String 
 mkFuncCallStr f = let argstr = (mkCallArgs . funcArgs) f 
-                  in funcName f ++ "(" ++ argstr ++ ")" 
+                      rettypbef = (cp_before . funcRet) f 
+                      rettypaft = (cp_after . funcRet) f 
+                      retconv = (cp_conv . funcRet) f 
+                      callstr = funcName f ++ "(" ++ argstr ++ ")"
+                      str = if (S.null retconv) 
+                            then "return " ++ callstr  
+                            else mkVarDecl (Var rettypbef "retval_b")  
+                                 ++ ";\n"
+                                 ++ mkVarDecl (Var rettypaft  "retval_a") 
+                                 ++ ";\n"
+                                 ++ "retval_a = " ++ callstr ++ ";\n"
+                                 ++ "retval_b = " ++ mkRevConvStr "retval_a" (funcRet f)
+                                 ++ ";\n"
+                                 ++ "return retval_b;"  
+                  in str
 
+
+-- | 
+mkFuncDef :: Function (CompProjPair String) -> String 
+mkFuncDef f = let f_after = fmap (cp_after) f 
+              in mkFuncDecl f_after ++ " {\n" ++ indent 2 (mkFuncCallStr f) ++ "}"
 
 
 -- | opaqueification string 

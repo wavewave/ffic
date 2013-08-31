@@ -118,12 +118,14 @@ test9 = do
   putStrLn $ "5: " ++ show typ5 ++ ":" ++ (mkRevConvStr "x" . mkCPPair) typ5
   putStrLn $ "6: " ++ show typ6 ++ ":" ++ (mkRevConvStr "x" . mkCPPair) typ6
 
+  print ((cp_conv . mkCPPair) typ6)
+
 
 
 test10 = do 
   let typ1 = CSimple (SOpaq "A") :: Composite String 
       typ2 = (CSimple (SPrim PrimInt)) :: Composite String
-      typ3 = CSimple (SPrim PrimVoid)
+      typ3 = (CSimple (SOpaq "B")) :: Composite String -- CSimple (SPrim PrimVoid)
 
       proj1 = (cp_after.mkCPPair) typ1
       proj2 = (cp_after.mkCPPair) typ2
@@ -141,12 +143,14 @@ test10 = do
   putStrLn $ " before: " ++ (mkFuncDecl f_before)
   putStrLn $ " after: " ++ (mkFuncDecl f_after)
   putStrLn $ (mkFuncCallStr f)
+  putStrLn "==============="
+  putStrLn $ mkFuncDef f
   -- putStrLn $ (mkConvStr "x" . mkCPPair) typ1
 
 
 
 
-main = test9
+main = test10
 
 
 main'  = do 
